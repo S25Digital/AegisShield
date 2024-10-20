@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 
+// Utility functions for redaction and masking
 const defaultRedactionPatterns = [
   /email|e-mail/i,
   /phone|mobile/i,
@@ -15,13 +16,6 @@ const defaultRedactionPatterns = [
   /tax\s?id|tin|ein/i,
   /address/i,
   /ip\s?address|ipv4|ipv6/i
-];
-
-const defaultMaskingPatterns = [
-  /credit\s?card/i,
-  /phone|mobile/i,
-  /passport/i,
-  /driver\s?license|dl\s?number/i
 ];
 
 type FieldConfig = {
@@ -58,7 +52,7 @@ export class AegisShield {
         sanitizedData[key] = this.applyFieldConfig(value, fieldConfig);
       } else if (this.isPiiField(key)) {
         if (this.encryptionConfig) {
-          sanitizedData[key] = this.encrypt(value);
+          sanitizedData[key] = this.encrypt(value, this.encryptionConfig.key, this.encryptionConfig.iv);
         } else {
           sanitizedData[key] = this.redactOrMask(value);
         }
@@ -74,7 +68,7 @@ export class AegisShield {
     if (this.encryptionConfig) {
       for (const [key, value] of Object.entries(reversedData)) {
         if (this.isEncrypted(value)) {
-          reversedData[key] = this.decrypt(value);
+          reversedData[key] = this.decrypt(value, this.encryptionConfig.key, this.encryptionConfig.iv);
         }
       }
     }
@@ -85,12 +79,12 @@ export class AegisShield {
   private applyFieldConfig(value: any, fieldConfig: FieldConfig): any {
     switch (fieldConfig.action) {
       case 'redact':
-        return this.applyRedaction(value);
+        return '[REDACTED]';
       case 'mask':
         return this.applyMasking(value);
       case 'encrypt':
         if (fieldConfig.encryptionKey) {
-          return this.encrypt(value, fieldConfig.encryptionKey);
+          return this.encrypt(value, fieldConfig.encryptionKey, this.encryptionConfig?.iv || Buffer.alloc(16));
         }
         return value;
       default:
@@ -104,51 +98,44 @@ export class AegisShield {
 
   private redactOrMask(value: any): any {
     if (typeof value === 'string') {
-      return this.applyRedaction(value) || this.applyMasking(value);
+      return '[REDACTED]';
     }
     return value;
-  }
-
-  private applyRedaction(value: string): string {
-    return value.replace(/./g, '[REDACTED]');
   }
 
   private applyMasking(value: string): string {
-    const pattern = defaultMaskingPatterns.find(pattern => pattern.test(value));
-    if (pattern) {
-      return value.replace(/.(?=.{4})/g, '*');
+    if (typeof value === 'string' && value.length > 4) {
+      return value.slice(0, -4).replace(/./g, '*') + value.slice(-4);
     }
     return value;
   }
 
-  private encrypt(value: any, key: Buffer = this.encryptionConfig?.key || Buffer.alloc(0)): string {
-    if (typeof value !== 'string' || !this.encryptionConfig) {
+  private encrypt(value: any, key: Buffer, iv: Buffer): string {
+    if (typeof value !== 'string') {
       return value;
     }
 
-    const cipher = crypto.createCipheriv(
-      this.encryptionConfig.algorithm,
-      key,
-      this.encryptionConfig.iv
-    );
-    let encrypted = cipher.update(value, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
+    try {
+      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      let encrypted = cipher.update(value, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      return encrypted;
+    } catch (error) {
+      console.error('Encryption error:', error.message);
+      throw error;
+    }
   }
 
-  private decrypt(value: string): string {
-    if (!this.encryptionConfig) {
-      return value;
+  private decrypt(value: string, key: Buffer, iv: Buffer): string {
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(value, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (error) {
+      console.error('Decryption error:', error.message);
+      throw error;
     }
-
-    const decipher = crypto.createDecipheriv(
-      this.encryptionConfig.algorithm,
-      this.encryptionConfig.key,
-      this.encryptionConfig.iv
-    );
-    let decrypted = decipher.update(value, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
   }
 
   private isEncrypted(value: any): boolean {
