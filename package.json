@@ -1,0 +1,62 @@
+{
+  "name": "aegis-shield",
+  "version": "1.0.0",
+  "description": "**AegisShield** is a comprehensive TypeScript package for identifying, handling, and protecting Personally Identifiable Information (PII) in data. It provides functionality for detecting common PII fields, applying redaction, masking, or encryption based on user configuration, and reversing these effects where possible.",
+  "main": "dist/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "prettier": "prettier --write .",
+    "prebuild": "rimraf dist",
+    "build": "node build.js",
+    "build:types": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "TZ=utc DOTENV_CONFIG_PATH=.env.spec mocha -r esbuild-register -r dotenv/config 'test/**/*.spec.ts' --timeout 10000",
+    "test:coverage": "nyc npm run test"
+  },
+  "keywords": [
+    "PII",
+    "data protection",
+    "privacy",
+    "encryption",
+    "redaction",
+    "masking",
+    "typescript",
+    "data security",
+    "security",
+    "data handling",
+    "sensitive data",
+    "aegis-shield",
+    "gdpr compliance",
+    "data sanitization",
+    "pii detection"
+  ],
+  "author": "Simranjeet Singh",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.10.5",
+    "@types/sinon": "^17.0.3",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "chai": "^5.0.0",
+    "dotenv": "^16.3.1",
+    "esbuild": "^0.19.10",
+    "esbuild-register": "^3.5.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "mocha": "^10.2.0",
+    "nock": "^13.4.0",
+    "nyc": "^15.1.0",
+    "prettier": "^3.1.1",
+    "rimraf": "^5.0.5",
+    "sinon": "^19.0.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.3.3"
+  }
+}
