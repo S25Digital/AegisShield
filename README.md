@@ -106,3 +106,5 @@ const shield = new AegisShield({
 ## License
 
 This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+The package is maintained by [S25Digital](https://s25.digital)
