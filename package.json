@@ -1,6 +1,6 @@
 {
   "name": "aegis-shield",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "**AegisShield** is a comprehensive TypeScript package for identifying, handling, and protecting Personally Identifiable Information (PII) in data. It provides functionality for detecting common PII fields, applying redaction, masking, or encryption based on user configuration, and reversing these effects where possible.",
   "main": "dist/index.js",
   "directories": {
