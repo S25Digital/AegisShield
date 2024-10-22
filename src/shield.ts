@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from "crypto";
 
 // Utility functions for redaction and masking
 const defaultRedactionPatterns = [
@@ -15,11 +15,11 @@ const defaultRedactionPatterns = [
   /date\s?of\s?birth|dob/i,
   /tax\s?id|tin|ein/i,
   /address/i,
-  /ip\s?address|ipv4|ipv6/i
+  /ip\s?address|ipv4|ipv6/i,
 ];
 
 type FieldConfig = {
-  action: 'redact' | 'mask' | 'encrypt';
+  action: "redact" | "mask" | "encrypt";
   encryptionKey?: Buffer;
 };
 
@@ -44,47 +44,61 @@ export class AegisShield {
   }
 
   public handlePii(data: Record<string, any>): Record<string, any> {
-    let sanitizedData = { ...data };
-
-    for (const [key, value] of Object.entries(sanitizedData)) {
-      const fieldConfig = this.fieldConfig[key];
-      if (fieldConfig) {
-        sanitizedData[key] = this.applyFieldConfig(value, fieldConfig);
-      } else if (this.isPiiField(key)) {
-        if (this.encryptionConfig) {
-          sanitizedData[key] = this.encrypt(value, this.encryptionConfig.key, this.encryptionConfig.iv);
-        } else {
-          sanitizedData[key] = this.redactOrMask(value);
-        }
-      }
-    }
-
-    return sanitizedData;
+    return this.processObject(data);
   }
 
   public reverseEffects(data: Record<string, any>): Record<string, any> {
-    let reversedData = { ...data };
+    return this.processObject(data, true);
+  }
 
-    if (this.encryptionConfig) {
-      for (const [key, value] of Object.entries(reversedData)) {
-        if (this.isEncrypted(value)) {
-          reversedData[key] = this.decrypt(value, this.encryptionConfig.key, this.encryptionConfig.iv);
-        }
+  private processObject(data: any, reverse = false, parentKey = ""): any {
+    if (typeof data !== "object" || data === null || Buffer.isBuffer(data)) {
+      return data;
+    }
+
+    const result: Record<string, any> = Array.isArray(data)
+      ? [...data]
+      : { ...data };
+
+    for (const [key, value] of Object.entries(result)) {
+      const fullKeyPath = parentKey ? `${parentKey}.${key}` : key;
+      const fieldConfig = this.getFieldConfig(fullKeyPath);
+
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Buffer.isBuffer(value)
+      ) {
+        result[key] = this.processObject(value, reverse, fullKeyPath);
+      } else if (fieldConfig) {
+        result[key] = reverse
+          ? this.reverseField(value, fieldConfig)
+          : this.applyFieldConfig(value, fieldConfig);
+      } else if (this.isPiiField(key) && !reverse) {
+        result[key] = this.redactOrMask(value);
       }
     }
 
-    return reversedData;
+    return result;
+  }
+
+  private getFieldConfig(keyPath: string): FieldConfig | undefined {
+    return this.fieldConfig[keyPath];
   }
 
   private applyFieldConfig(value: any, fieldConfig: FieldConfig): any {
     switch (fieldConfig.action) {
-      case 'redact':
-        return '[REDACTED]';
-      case 'mask':
+      case "redact":
+        return "[REDACTED]";
+      case "mask":
         return this.applyMasking(value);
-      case 'encrypt':
+      case "encrypt":
         if (fieldConfig.encryptionKey) {
-          return this.encrypt(value, fieldConfig.encryptionKey, this.encryptionConfig?.iv || Buffer.alloc(16));
+          return this.encrypt(
+            value,
+            fieldConfig.encryptionKey,
+            this.encryptionConfig?.iv || Buffer.alloc(16),
+          );
         }
         return value;
       default:
@@ -92,53 +106,64 @@ export class AegisShield {
     }
   }
 
+  private reverseField(value: any, fieldConfig: FieldConfig): any {
+    if (fieldConfig.action === "encrypt" && fieldConfig.encryptionKey) {
+      return this.decrypt(
+        value,
+        fieldConfig.encryptionKey,
+        this.encryptionConfig?.iv || Buffer.alloc(16),
+      );
+    }
+    return value;
+  }
+
   private isPiiField(field: string): boolean {
-    return defaultRedactionPatterns.some(pattern => pattern.test(field));
+    return defaultRedactionPatterns.some((pattern) => pattern.test(field));
   }
 
   private redactOrMask(value: any): any {
-    if (typeof value === 'string') {
-      return '[REDACTED]';
+    if (typeof value === "string") {
+      return "[REDACTED]";
     }
     return value;
   }
 
   private applyMasking(value: string): string {
-    if (typeof value === 'string' && value.length > 4) {
-      return value.slice(0, -4).replace(/./g, '*') + value.slice(-4);
+    if (typeof value === "string" && value.length > 4) {
+      return value.slice(0, -4).replace(/./g, "*") + value.slice(-4);
     }
     return value;
   }
 
   private encrypt(value: any, key: Buffer, iv: Buffer): string {
-    if (typeof value !== 'string') {
+    if (typeof value !== "string") {
       return value;
     }
 
     try {
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-      let encrypted = cipher.update(value, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
+      const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+      let encrypted = cipher.update(value, "utf8", "hex");
+      encrypted += cipher.final("hex");
       return encrypted;
     } catch (error) {
-      console.error('Encryption error:', error.message);
+      console.error("Encryption error:", error.message);
       throw error;
     }
   }
 
   private decrypt(value: string, key: Buffer, iv: Buffer): string {
     try {
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-      let decrypted = decipher.update(value, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+      let decrypted = decipher.update(value, "hex", "utf8");
+      decrypted += decipher.final("utf8");
       return decrypted;
     } catch (error) {
-      console.error('Decryption error:', error.message);
+      console.error("Decryption error:", error.message);
       throw error;
     }
   }
 
   private isEncrypted(value: any): boolean {
-    return typeof value === 'string' && /^[a-f0-9]{32,}$/i.test(value);
+    return typeof value === "string" && /^[a-f0-9]{32,}$/i.test(value);
   }
 }
